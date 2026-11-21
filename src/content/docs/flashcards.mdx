@@ -6,6 +6,15 @@ tableOfContents: false
 
 import Flashcards from '../../components/Flashcards.astro';
 
-Toque no card para virar. Marque **Sabia** ou **Errei**: os cards que você errou voltam no fim da rodada.
+Toque no card para virar e diga como foi. Seu progresso fica salvo neste navegador.
+
+| Botão | Volta quando |
+|---|---|
+| ❌ Errei | daqui a 3 cards, até você acertar |
+| 😬 Difícil | mais uma vez nesta rodada e de novo amanhã |
+| 🙂 Bom | em 3 dias |
+| 😎 Fácil | em 7 dias |
+
+Errados e difíceis aparecem primeiro. **Dominados** são os cards marcados Bom ou Fácil que ainda não venceram.
 
 <Flashcards />

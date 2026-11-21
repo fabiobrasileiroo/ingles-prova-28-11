@@ -25,39 +25,61 @@ decks['Verbos irregulares (V2 · V3)'] = verbs.split('|').map((v) => {
     <span class="fc-back"></span>
   </button>
   <div class="fc-actions">
-    <button type="button" class="fc-wrong">❌ Errei</button>
-    <button type="button" class="fc-right">✅ Sabia</button>
+    <button type="button" data-level="errei">❌ Errei</button>
+    <button type="button" data-level="dificil">😬 Difícil</button>
+    <button type="button" data-level="bom">🙂 Bom</button>
+    <button type="button" data-level="facil">😎 Fácil</button>
   </div>
   <label class="fc-reverse"><input type="checkbox" /> Mostrar a tradução primeiro</label>
+  <button type="button" class="fc-reset">Apagar meu progresso</button>
 </div>
 
 <script>
+  type Level = 'errei' | 'dificil' | 'bom' | 'facil';
+  type Progress = Record<string, { level: Level; due: number }>;
+
+  const DAY = 86_400_000;
+  // Errei e Difícil voltam ainda nesta rodada (Errei mais cedo); Bom e Fácil só voltam dias depois.
+  const RULES: Record<Level, { days: number; requeueAt?: number }> = {
+    errei: { days: 0, requeueAt: 3 },
+    dificil: { days: 1, requeueAt: 8 },
+    bom: { days: 3 },
+    facil: { days: 7 },
+  };
+  const PRIORITY: Record<string, number> = { errei: 0, dificil: 1, novo: 2, bom: 3, facil: 4 };
+  const KEY = 'flashcards-progresso-v1';
+
   const root = document.querySelector<HTMLElement>('.fc')!;
   const decks: Record<string, [string, string][]> = JSON.parse(root.dataset.decks!);
   const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
   const select = $<HTMLSelectElement>('.fc-deck');
   const card = $('.fc-card');
   const reverse = $<HTMLInputElement>('.fc-reverse input');
+  const progress: Progress = JSON.parse(localStorage.getItem(KEY) ?? '{}');
   let queue: [string, string][] = [];
-  let done = 0;
-  let total = 0;
+  let hardThisRound = new Set<string>();
 
   select.innerHTML = ['Tudo misturado', ...Object.keys(decks)].map((d) => `<option>${d}</option>`).join('');
 
-  function start() {
-    const cards = select.selectedIndex === 0 ? Object.values(decks).flat() : decks[select.value];
-    queue = [...cards].sort(() => Math.random() - 0.5);
-    done = 0;
-    total = queue.length;
+  const deckCards = () => (select.selectedIndex === 0 ? Object.values(decks).flat() : decks[select.value]);
+  const isDue = ([front]: [string, string]) => !progress[front] || progress[front].due <= Date.now();
+  const rank = ([front]: [string, string]) => PRIORITY[progress[front]?.level ?? 'novo'];
+
+  function start(all = false) {
+    const cards = all ? deckCards() : deckCards().filter(isDue);
+    queue = cards.sort(() => Math.random() - 0.5).sort((a, b) => rank(a) - rank(b));
+    hardThisRound = new Set();
     show();
   }
 
   function show() {
     card.classList.remove('flipped');
-    $('.fc-count').textContent = `${done} de ${total} dominados`;
+    const cards = deckCards();
+    const mastered = cards.filter(([f]) => ['bom', 'facil'].includes(progress[f]?.level) && !isDue([f, ''])).length;
+    $('.fc-count').textContent = `${mastered} de ${cards.length} dominados · ${queue.length} para revisar agora`;
     if (!queue.length) {
-      $('.fc-front').textContent = '🎉 Rodada completa!';
-      $('.fc-back').textContent = 'Toque para recomeçar';
+      $('.fc-front').textContent = '🎉 Nada para revisar agora!';
+      $('.fc-back').textContent = 'Toque para revisar tudo mesmo assim';
       return;
     }
     const [a, b] = queue[0];
@@ -65,10 +87,31 @@ decks['Verbos irregulares (V2 · V3)'] = verbs.split('|').map((v) => {
     $('.fc-back').textContent = reverse.checked ? a : b;
   }
 
-  card.addEventListener('click', () => (queue.length ? card.classList.toggle('flipped') : start()));
-  $('.fc-right').addEventListener('click', () => { if (queue.shift()) done++; show(); });
-  $('.fc-wrong').addEventListener('click', () => { const c = queue.shift(); if (c) queue.push(c); show(); });
-  select.addEventListener('change', start);
+  function answer(level: Level) {
+    const current = queue.shift();
+    if (!current) return show();
+    const rule = RULES[level];
+    progress[current[0]] = { level, due: Date.now() + rule.days * DAY };
+    localStorage.setItem(KEY, JSON.stringify(progress));
+    // Difícil volta só uma vez por rodada; Errei volta até você acertar.
+    if (rule.requeueAt && (level === 'errei' || !hardThisRound.has(current[0]))) {
+      if (level === 'dificil') hardThisRound.add(current[0]);
+      queue.splice(rule.requeueAt, 0, current);
+    }
+    show();
+  }
+
+  card.addEventListener('click', () => (queue.length ? card.classList.toggle('flipped') : start(true)));
+  root.querySelectorAll<HTMLButtonElement>('[data-level]').forEach((b) =>
+    b.addEventListener('click', () => answer(b.dataset.level as Level)),
+  );
+  $('.fc-reset').addEventListener('click', () => {
+    if (!confirm('Apagar todo o progresso dos flashcards?')) return;
+    localStorage.removeItem(KEY);
+    for (const k in progress) delete progress[k];
+    start();
+  });
+  select.addEventListener('change', () => start());
   reverse.addEventListener('change', show);
   start();
 </script>
@@ -81,7 +124,8 @@ decks['Verbos irregulares (V2 · V3)'] = verbs.split('|').map((v) => {
   .fc-back { display: none; font-size: 1.35rem; }
   .fc-card.flipped .fc-front { display: none; }
   .fc-card.flipped .fc-back { display: block; }
-  .fc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-  .fc-actions button { font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+  .fc-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+  .fc-actions button { font-size: 0.95rem; padding: 0.6rem 0.2rem; font-weight: 700; cursor: pointer; }
   .fc-reverse { text-align: center; font-size: 0.9rem; }
+  .fc-reset { justify-self: center; background: none; border: none; color: var(--sl-color-gray-3); text-decoration: underline; font: inherit; font-size: 0.8rem; cursor: pointer; }
 </style>
