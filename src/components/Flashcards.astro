@@ -1,0 +1,87 @@
+---
+import vocab from '../../vocabulario.md?raw';
+
+// "- palavra — tradução" agrupado pelo "## título" anterior
+const decks: Record<string, [string, string][]> = {};
+let current = '';
+for (const line of vocab.split('\n')) {
+  if (line.startsWith('## ')) current = line.slice(3).trim();
+  const m = line.match(/^- (.+?) — (.+)$/);
+  if (m && current) (decks[current] ??= []).push([m[1], m[2]]);
+}
+
+const verbs = 'be was/were been|eat ate eaten|go went gone|drink drank drunk|choose chose chosen|write wrote written|see saw seen|take took taken|make made made|do did done|have had had|give gave given|buy bought bought|bring brought brought|think thought thought|find found found|know knew known|forget forgot forgotten|break broke broken|speak spoke spoken|steal stole stolen|wear wore worn|build built built|send sent sent|begin began begun|swim swam swum|fly flew flown|grow grew grown|hear heard heard|meet met met|read read read|ride rode ridden|sing sang sung|teach taught taught';
+decks['Verbos irregulares (V2 · V3)'] = verbs.split('|').map((v) => {
+  const [v1, v2, v3] = v.split(' ');
+  return [v1, `${v2} · ${v3}`];
+});
+---
+
+<div class="fc not-content" data-decks={JSON.stringify(decks)}>
+  <select class="fc-deck" aria-label="Baralho"></select>
+  <p class="fc-count"></p>
+  <button class="fc-card" type="button" aria-live="polite">
+    <span class="fc-front"></span>
+    <span class="fc-back"></span>
+  </button>
+  <div class="fc-actions">
+    <button type="button" class="fc-wrong">❌ Errei</button>
+    <button type="button" class="fc-right">✅ Sabia</button>
+  </div>
+  <label class="fc-reverse"><input type="checkbox" /> Mostrar a tradução primeiro</label>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('.fc')!;
+  const decks: Record<string, [string, string][]> = JSON.parse(root.dataset.decks!);
+  const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+  const select = $<HTMLSelectElement>('.fc-deck');
+  const card = $('.fc-card');
+  const reverse = $<HTMLInputElement>('.fc-reverse input');
+  let queue: [string, string][] = [];
+  let done = 0;
+  let total = 0;
+
+  select.innerHTML = ['Tudo misturado', ...Object.keys(decks)].map((d) => `<option>${d}</option>`).join('');
+
+  function start() {
+    const cards = select.selectedIndex === 0 ? Object.values(decks).flat() : decks[select.value];
+    queue = [...cards].sort(() => Math.random() - 0.5);
+    done = 0;
+    total = queue.length;
+    show();
+  }
+
+  function show() {
+    card.classList.remove('flipped');
+    $('.fc-count').textContent = `${done} de ${total} dominados`;
+    if (!queue.length) {
+      $('.fc-front').textContent = '🎉 Rodada completa!';
+      $('.fc-back').textContent = 'Toque para recomeçar';
+      return;
+    }
+    const [a, b] = queue[0];
+    $('.fc-front').textContent = reverse.checked ? b : a;
+    $('.fc-back').textContent = reverse.checked ? a : b;
+  }
+
+  card.addEventListener('click', () => (queue.length ? card.classList.toggle('flipped') : start()));
+  $('.fc-right').addEventListener('click', () => { if (queue.shift()) done++; show(); });
+  $('.fc-wrong').addEventListener('click', () => { const c = queue.shift(); if (c) queue.push(c); show(); });
+  select.addEventListener('change', start);
+  reverse.addEventListener('change', show);
+  start();
+</script>
+
+<style>
+  .fc { display: grid; gap: 0.75rem; max-width: 28rem; margin: 1.5rem auto; }
+  .fc-deck, .fc-actions button { font: inherit; padding: 0.6rem; border-radius: 0.75rem; border: 2px solid var(--sl-color-gray-5); background: var(--sl-color-bg); color: var(--sl-color-text); }
+  .fc-count { margin: 0; text-align: center; color: var(--sl-color-gray-3); }
+  .fc-card { min-height: 12rem; border-radius: 1.25rem; border: 3px solid var(--sl-color-accent); background: var(--sl-color-accent-low); color: var(--sl-color-white); font-family: 'Itim', cursive; font-size: 1.75rem; display: grid; place-items: center; padding: 1.5rem; cursor: pointer; text-align: center; }
+  .fc-back { display: none; font-size: 1.35rem; }
+  .fc-card.flipped .fc-front { display: none; }
+  .fc-card.flipped .fc-back { display: block; }
+  .fc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .fc-actions button { font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+  .fc-reverse { text-align: center; font-size: 0.9rem; }
+</style>

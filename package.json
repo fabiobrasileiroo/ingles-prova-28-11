@@ -1,0 +1,14 @@
+{
+  "name": "ingles-prova-28-11",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "sync": "node sync-docs.mjs",
+    "dev": "npm run sync && astro dev",
+    "build": "npm run sync && astro build"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.43.1",
+    "astro": "^7.3.8"
+  }
+}
