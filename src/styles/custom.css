@@ -1,6 +1,7 @@
 /* Identidade Fábio Brasileiro: Itim nos títulos, Nunito no texto, ciano + açaí */
 :root {
   --sl-font: 'Nunito', system-ui, sans-serif;
+  --sl-content-width: 50rem; /* padrão 45rem; um pouco mais largo para as tabelas do guia */
   --sl-color-accent-low: #2a1236;
   --sl-color-accent: #12a7c4;
   --sl-color-accent-high: #b8ecf6;
